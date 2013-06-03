@@ -1423,6 +1423,7 @@ netlink_route (int cmd, int family, void *dest, int length, void *gate,
   return 0;
 }
 
+
 /* This function takes a nexthop as argument and adds
  * the appropriate netlink attributes to an existing
  * netlink message.
@@ -1440,8 +1441,11 @@ _netlink_route_build_singlepath(
         int bytelen,
         struct nexthop *nexthop,
         struct nlmsghdr *nlmsg,
-	size_t req_size)
+        struct rtmsg *rtmsg,
+        size_t req_size)
 {
+  if (CHECK_FLAG (nexthop->flags, NEXTHOP_FLAG_ONLINK))
+    rtmsg->rtm_flags |= RTNH_F_ONLINK;
   if (nexthop->type == NEXTHOP_TYPE_IPV4
       || nexthop->type == NEXTHOP_TYPE_IPV4_IFINDEX)
     {
@@ -1530,6 +1534,9 @@ _netlink_route_build_multipath(
   rtnh->rtnh_flags = 0;
   rtnh->rtnh_hops = 0;
   rta->rta_len += rtnh->rtnh_len;
+
+  if (CHECK_FLAG (nexthop->flags, NEXTHOP_FLAG_ONLINK))
+    rtnh->rtnh_flags |= RTNH_F_ONLINK;
 
   if (nexthop->type == NEXTHOP_TYPE_IPV4
       || nexthop->type == NEXTHOP_TYPE_IPV4_IFINDEX)
@@ -1730,7 +1737,8 @@ netlink_route_multipath (int cmd, struct prefix *p, struct rib *rib,
 
               _netlink_route_debug(cmd, p, nexthop, routedesc, family);
               _netlink_route_build_singlepath(routedesc, bytelen,
-                                              nexthop, &req.n, sizeof req);
+                                              nexthop, &req.n, &req.r,
+                                              sizeof req);
 
               if (cmd == RTM_NEWROUTE)
                 SET_FLAG (nexthop->flags, NEXTHOP_FLAG_FIB);
