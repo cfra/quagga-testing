@@ -224,6 +224,31 @@ class TestSimple(quagga.TestCase):
         self.assertNotIn(str(self.route.dest), system.fib(6))
         self.assertNotIn(str(self.route.dest), self.zebra.rib('O',6))
 
+    def test_cleanup(self):
+        self.route.add_nexthop('2001:db8:1:1::2')
+
+        self.zclient.add_route(self.route)
+        time.sleep(0.1)
+
+        self.assertIn(str(self.route.dest), self.zebra.rib('O',6))
+        self.assertRoutes({
+            str(self.route.dest): {
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': self.dummy1.name,
+                    },
+                ],
+            },
+        }, system.fib(6))
+
+        self.zclient.close()
+
+        time.sleep(0.5)
+
+        self.assertNotIn(str(self.route.dest), system.fib(6))
+        self.assertNotIn(str(self.route.dest), self.zebra.rib('O',6))
+
 
 @requires.ipv6
 @requires.root
