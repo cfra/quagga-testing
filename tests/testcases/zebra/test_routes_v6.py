@@ -249,6 +249,57 @@ class TestSimple(quagga.TestCase):
         self.assertNotIn(str(self.route.dest), system.fib(6))
         self.assertNotIn(str(self.route.dest), self.zebra.rib('O',6))
 
+@requires.ipv6
+@requires.root
+class TestSrcDest(quagga.TestCase):
+    def setUp(self):
+        self.dummy1 = system.DummyIface()
+        self.dummy1.up()
+        self.dummy1.addr_add('2001:db8:1:1::1/64', 6)
+
+        self.dummy2 = system.DummyIface()
+        self.dummy2.up()
+        self.dummy2.addr_add('2001:db8:1:2::1/64', 6)
+
+        self.zebra = quagga.Zebra()
+
+        self.zclient = pyzclient.ZClient(pyzclient.ZEBRA_ROUTE_OSPF6)
+        self.route = pyzclient.Route(None, '2001:db8:2::/48', '2001:db8:cafe::/48')
+        self.route_id = '%s from %s' % (self.route.dest, self.route.src)
+
+    def tearDown(self):
+        del self.route_id
+        del self.route
+        del self.zclient
+        del self.zebra
+        del self.dummy2
+        del self.dummy1
+
+    def test_cleanup(self):
+        self.route.add_nexthop('2001:db8:1:1::2')
+
+        self.zclient.add_route(self.route)
+        time.sleep(0.1)
+
+        self.assertIn(self.route_id, self.zebra.rib('O',6))
+        self.assertRoutes({
+            self.route_id: {
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': self.dummy1.name,
+                    },
+                ],
+            },
+        }, system.fib(6))
+
+        self.zclient.close()
+
+        time.sleep(0.5)
+
+        self.assertNotIn(self.route_id, system.fib(6))
+        self.assertNotIn(self.route_id, self.zebra.rib('O',6))
+
 
 @requires.ipv6
 @requires.root

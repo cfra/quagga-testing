@@ -102,6 +102,7 @@ class Zebra(object):
 
             match = re.match(r'(?P<protocol>[A-Z])(?P<selected>[> ])(?P<fib>[\* ])'
                                  r' (?P<prefix>[\da-fA-F:\.]+/\d+)'
+                                 r'(?: from (?P<from>[\da-fA-F:\.]+/\d+))?'
                                  r'(?: \[(?P<distance>\d+)/(?P<metric>\d+)\])? ',
                              line)
             if match is not None:
@@ -110,6 +111,9 @@ class Zebra(object):
                 selected = match.group('selected') == '>'
                 # group fib will be used later
                 prefix = match.group('prefix')
+                from_ = match.group('from')
+                if from_ is not None:
+                    prefix += ' from %s' % from_
                 distance = match.group('distance')
                 metric = match.group('metric')
 
@@ -119,6 +123,7 @@ class Zebra(object):
                     'selected': selected,
                     'distance': distance,
                     'metric': metric,
+                    'from': from_,
                     'nexthops': []
                 }
 

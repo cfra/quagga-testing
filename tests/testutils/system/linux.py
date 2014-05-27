@@ -16,7 +16,7 @@ def fib(ipv = 4):
     routes = {}
     while True:
         i = rlist.expect([
-                r'^(?P<dest>(?:default|[\da-fA-F\:\.]+\/\d+)) ',
+                r'^(?P<dest>(?:default|[\da-fA-F\:\.]+\/\d+)) (?:from (?P<from>[\da-fA-F\:\.]+/\d+) )?',
                 pexpect.EOF
         ])
 
@@ -24,8 +24,11 @@ def fib(ipv = 4):
             break
 
         dst = rlist.match.group('dest')
+        from_ = rlist.match.group('from')
         if dst == 'default':
             dst = '0.0.0.0/0' if ipv == 4 else '::/0'
+        if from_ is not None:
+            dst = '%s from %s' % (dst, from_)
 
         i = rlist.expect([
                 r'^[^\n\\]*?(?:via (?P<gate>[\da-fA-F\:\.]+) +)?dev (?P<iface>[^\s]+).*?\n',
@@ -49,6 +52,7 @@ def fib(ipv = 4):
                         'iface': iface,
                     }],
             }
+
             continue
 
         # multipath

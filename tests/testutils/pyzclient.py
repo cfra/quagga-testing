@@ -76,7 +76,7 @@ class ZebraRouteTypeMessage(ZebraMessage):
         ZebraMessage.__init__(self, 0, payload)
 
 class Route(object):
-    def __init__(self, route_type, dest, safi=SAFI_UNICAST):
+    def __init__(self, route_type, dest, src=None, safi=SAFI_UNICAST):
         self.route_type = route_type
         self.dest = ipaddr.IPNetwork(dest)
 
@@ -87,6 +87,13 @@ class Route(object):
         else:
             raise RuntimeError('Unsupported inet version')
 
+        if src is not None:
+            if self.afi != AFI_IP6:
+                raise RuntimeError('SrcDst routing is currently only available or IPv6')
+            self.src = ipaddr.IPNetwork(src)
+        else:
+            self.src = None
+
         self.safi = safi
         self.nexthops = []
         self.rib_flags = 0
@@ -94,10 +101,11 @@ class Route(object):
         self.metric = None
 
     def __repr__(self):
-        return_value = 'Route(%s, %s, %r, nexthops=[\n' % (
+        return_value = 'Route(%s, %s, %r, %snexthops=[\n' % (
                 repr_constant('ZEBRA_ROUTE_', self.route_type),
                 repr_constant('SAFI_', self.safi),
-                self.dest
+                self.dest,
+                'src=%r, ' % self.src if self.src is not None else ''
         )
 
         for nexthop in self.nexthops:
@@ -162,6 +170,11 @@ class ZebraRouteMessage(ZebraMessage):
 
         # Prefix padded to whole byte
         payload += route.dest.packed[:((route.dest.prefixlen + 7)/8)]
+
+        if route.src is not None:
+            message |= ZAPI_MESSAGE_SRCPFX
+            payload += struct.pack('!B', route.src.prefixlen)
+            payload += route.src.packed[:((route.src.prefixlen + 7)/8)]
 
         if route.nexthops:
             message |= ZAPI_MESSAGE_NEXTHOP
@@ -229,7 +242,22 @@ class ZebraRouteMessage(ZebraMessage):
             raise RuntimeError("Unsupported AFI")
         prefix = '%s/%d' % (prefix_str, prefix_len)
 
-        route = Route(route_type, prefix)
+        if message & ZAPI_MESSAGE_SRCPFX:
+            if afi != AFI_IP6:
+                raise RuntimeError("Unexpected src-dest route with AFI != IPv6")
+
+            src_len = struct.unpack('!B', buf)
+            buf = buf[1:]
+
+            src_bytes = (src_len + 7) / 8
+            src_buf, buf = buf[:src_bytes], buf[src_bytes:]
+            src_buf += '\x00' * (16 - len(src_buf))
+            src_str = socket.inet_ntop(socket.AF_INET6, src_buf)
+            src = '%s/%d' % (src_str, src_len)
+        else:
+            src = None
+
+        route = Route(route_type, prefix, src)
         route.rib_flags = rib_flags
 
         if message & ZAPI_MESSAGE_NEXTHOP:
