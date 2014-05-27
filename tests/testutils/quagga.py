@@ -1,5 +1,6 @@
 # vim:set ts=4 expandtab:
 
+import grp
 import os
 import pprint
 import pwd
@@ -18,11 +19,20 @@ class Zebra(object):
         self.pid_file = tempfile.NamedTemporaryFile()
         self.config_file = tempfile.NamedTemporaryFile()
         self.user = pwd.getpwuid(os.getuid())
-        self.zebra = pexpect.spawn(
-                '../zebra/zebra -i {0} -f {1} -u {2} -t'.format(
+        self.group = grp.getgrgid(os.getgid())
+
+        zebra_cmd_line = \
+                '../zebra/zebra -i {0} -f {1} -u {2} -g {3} -t'.format(
                     self.pid_file.name,
                     self.config_file.name,
-                    self.user.pw_name),
+                    self.user.pw_name,
+                    self.group.gr_name)
+
+        generic.do_log("Spawning zebra with command line '{0}'".format(
+                           zebra_cmd_line)
+        )
+        self.zebra = pexpect.spawn(
+                zebra_cmd_line,
                 timeout = 5,
                 logfile = generic.LogFile('zebra')
         )
