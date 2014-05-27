@@ -21,7 +21,7 @@ noinst_HEADERS = \
 	testutils/prng.h
 
 check:
-	python run_tests.py -v
+	python2 run_tests.py -v
 
 .PHONY: check
 

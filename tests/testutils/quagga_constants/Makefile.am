@@ -21,7 +21,7 @@ check_LTLIBRARIES = _header_constants.la
 
 _header_constants_la_SOURCES = header_constants_wrap.c
 _header_constants_la_LDFLAGS = -module -rpath `pwd`
-_header_constants_la_CFLAGS = `pkg-config python --cflags`
+_header_constants_la_CFLAGS = `pkg-config python2 --cflags`
 
 header_constants_wrap.c: \
 		header_constants.i \
