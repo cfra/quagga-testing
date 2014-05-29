@@ -275,6 +275,201 @@ class TestSrcDest(quagga.TestCase):
         del self.dummy2
         del self.dummy1
 
+    def test_nexthop_ifindex(self):
+        self.route.add_nexthop(ifindex=self.dummy1.index)
+        self.zclient.add_route(self.route)
+        time.sleep(0.1)
+
+        self.assertIn(self.route_id, self.zebra.rib('O', 6))
+        self.assertRoutes({
+            self.route_id: {
+                'nexthops': [
+                    {
+                        'gate': None,
+                        'iface': self.dummy1.name,
+                    },
+                ],
+            },
+        }, system.fib(6))
+
+        self.zclient.del_route(self.route)
+        time.sleep(0.1)
+
+        self.assertNotIn(self.route_id, system.fib(6))
+        self.assertNotIn(self.route_id, self.zebra.rib('O',6))
+
+    def test_nexthop_ipv6(self):
+        self.route.add_nexthop('2001:db8:1:1::2')
+
+        self.zclient.add_route(self.route)
+        time.sleep(0.1)
+
+        self.assertIn(self.route_id, self.zebra.rib('O',6))
+        self.assertRoutes({
+            self.route_id: {
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': self.dummy1.name,
+                    },
+                ],
+            },
+        }, system.fib(6))
+
+        self.zclient.del_route(self.route)
+        time.sleep(0.1)
+
+        self.assertNotIn(self.route_id, system.fib(6))
+        self.assertNotIn(self.route_id, self.zebra.rib('O',6))
+
+    def test_nexthop_ipv6_ifindex(self):
+        # There is currently no multipath support for IPv6 :(
+        # Zebra will just merge all the nexthop information
+        # into one :/
+
+        self.route.add_nexthop('fe80::23')
+        self.route.add_nexthop(ifindex=self.dummy1.index)
+        self.zclient.add_route(self.route)
+        time.sleep(0.1)
+
+        self.assertIn(self.route_id, self.zebra.rib('O',6))
+        self.assertRoutes({
+            self.route_id: {
+                'nexthops': [
+                    {
+                        'gate': 'fe80::23',
+                        'iface': self.dummy1.name,
+                    },
+                ],
+            },
+        }, system.fib(6))
+
+        self.zclient.del_route(self.route)
+        time.sleep(0.1)
+
+        self.assertNotIn(self.route_id, system.fib(6))
+        self.assertNotIn(self.route_id, self.zebra.rib('O', 6))
+
+    def test_nexthop_ipv6_ifindex_invalid(self):
+        self.route.add_nexthop('2001:db8:1:1::2')
+        self.route.add_nexthop(ifindex=self.dummy2.index)
+        self.zclient.add_route(self.route)
+        time.sleep(0.1)
+
+        # Route should be in RIB, but not in fib
+        # XXX: Is it right to mark that route as selected and active??
+        self.assertRoutes({
+            self.route_id: {
+#                'selected': False,
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': self.dummy2.name,
+                        'fib': False,
+#                        'active': False
+                    },
+                ]
+            },
+        }, self.zebra.rib('O',6))
+        # Route shouldn't be in FIB
+        self.assertNotIn(self.route_id, system.fib(6))
+
+        # Make the gateway reachable by adding an address to the interface
+        self.dummy2.addr_add('2001:db8:1:1::1/64', 6)
+        time.sleep(0.1)
+
+        # RIB should now show nexthop as installed into FIB
+        self.assertRoutes({
+            self.route_id: {
+                'selected': True,
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': self.dummy2.name,
+                        'fib': True,
+                        'active': True
+                    },
+                ]
+            },
+        }, self.zebra.rib('O',6))
+        # Route should be in FIB
+        self.assertRoutes({
+            self.route_id: {
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': self.dummy2.name
+                    }
+                ]
+            },
+        }, system.fib(6))
+
+        self.zclient.del_route(self.route)
+        time.sleep(0.1)
+
+        self.assertNotIn(self.route_id, system.fib(6))
+        self.assertNotIn(self.route_id, self.zebra.rib('O',6))
+
+    def test_nexthop_ipv6_invalid(self):
+        self.route.add_nexthop('2001:db8:1:1::2')
+        self.dummy1.addr_del('2001:db8:1:1::1/64', 6)
+        time.sleep(0.1)
+
+        self.zclient.add_route(self.route)
+        time.sleep(0.1)
+
+        # Route should be in RIB, marked as inactive
+        self.assertRoutes({
+            self.route_id: {
+                'selected': False,
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': None,
+                        'fib': False,
+                        'active': False,
+                    },
+                ]
+            },
+        }, self.zebra.rib('O',6))
+        # Route shouldn't be in FIB
+        self.assertNotIn(self.route_id, system.fib(6))
+
+        # Make the gateway reachable by adding the address
+        self.dummy1.addr_add('2001:db8:1:1::1/64', 6)
+        time.sleep(0.1)
+
+        # RIB should show route as active and fib now
+        self.assertRoutes({
+            self.route_id: {
+                'selected': True,
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                        'iface': self.dummy1.name,
+                        'fib': True,
+                        'active': True,
+                    },
+                ]
+            },
+        }, self.zebra.rib('O',6))
+        # route should be in fib now
+        self.assertRoutes({
+            self.route_id: {
+                'nexthops': [
+                    {
+                        'gate': '2001:db8:1:1::2',
+                    },
+                ]
+            },
+        }, system.fib(6))
+
+        self.zclient.del_route(self.route)
+        time.sleep(0.1)
+
+        self.assertNotIn(self.route_id, system.fib(6))
+        self.assertNotIn(self.route_id, self.zebra.rib('O',6))
+
     def test_cleanup(self):
         self.route.add_nexthop('2001:db8:1:1::2')
 
