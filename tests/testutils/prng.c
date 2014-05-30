@@ -25,40 +25,23 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "prng.h"
 
 struct prng
 {
-  unsigned long long state1;
-  unsigned long long state2;
+  uint32_t state;
 };
 
-static char
-prng_bit(struct prng *prng)
-{
-  prng->state1 *= 2416;
-  prng->state1 += 374441;
-  prng->state1 %= 1771875;
-
-  if (prng->state1 % 2)
-    {
-      prng->state2 *= 84589;
-      prng->state2 += 45989;
-      prng->state2 %= 217728;
-    }
-
-  return prng->state2 % 2;
-}
-
 struct prng*
-prng_new(unsigned long long seed)
+prng_new(uint32_t seed)
 {
   struct prng *rv = calloc(sizeof(*rv), 1);
   assert(rv);
 
-  rv->state1 = rv->state2 = seed;
+  rv->state = seed;
 
   return rv;
 }
@@ -66,14 +49,10 @@ prng_new(unsigned long long seed)
 unsigned int
 prng_rand(struct prng *prng)
 {
-  unsigned int i, rv = 0;
+  prng->state *= 1664525;
+  prng->state += 1013904223;
 
-  for (i = 0; i < 32; i++)
-    {
-      rv |= prng_bit(prng);
-      rv <<= 1;
-    }
-  return rv;
+  return prng->state;
 }
 
 const char *

@@ -25,9 +25,11 @@
 #ifndef _PRNG_H
 #define _PRNG_H
 
+#include <stdint.h>
+
 struct prng;
 
-struct prng* prng_new(unsigned long long seed);
+struct prng* prng_new(uint32_t seed);
 unsigned int prng_rand(struct prng*);
 const char * prng_fuzz(struct prng*,
                        const char *string,
